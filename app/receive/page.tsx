@@ -101,6 +101,10 @@ export default function ReceivePage() {
       dataChannel.current.send(JSON.stringify({ type: "transfer-ack" }));
       console.log("Sent transfer acknowledgment to sender");
     }
+
+    currentFileMetadata.current = null;
+    receivedChunks.current = [];
+    bytesReceived.current = 0;
   };
   const roomCodeRef = React.useRef(value);
   React.useEffect(() => {
