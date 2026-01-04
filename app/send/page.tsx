@@ -77,12 +77,14 @@ export default function SendPage() {
 
       return null;
     },
-    [files],
+    [files]
   );
 
   const onFileReject = React.useCallback((file: File, message: string) => {
     toast(message, {
-      description: `"${file.name.length > 20 ? `${file.name.slice(0, 20)}...` : file.name}" has been rejected`,
+      description: `"${
+        file.name.length > 20 ? `${file.name.slice(0, 20)}...` : file.name
+      }" has been rejected`,
     });
   }, []);
 
@@ -91,7 +93,10 @@ export default function SendPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="relative">
           {!isSent && (
-            <Link href="/" className="absolute left-6 top-6 text-muted-foreground hover:text-foreground">
+            <Link
+              href="/"
+              className="absolute left-6 top-6 text-muted-foreground hover:text-foreground"
+            >
               <ArrowLeft className="h-6 w-6" />
             </Link>
           )}
@@ -122,7 +127,9 @@ export default function SendPage() {
                     <div className="flex items-center justify-center rounded-full border p-2.5">
                       <Upload className="size-6 text-muted-foreground" />
                     </div>
-                    <p className="font-medium text-sm">Drag & drop files here</p>
+                    <p className="font-medium text-sm">
+                      Drag & drop files here
+                    </p>
                     <p className="text-muted-foreground text-xs">
                       Or click to browse (max 2 files)
                     </p>
@@ -184,12 +191,6 @@ export default function SendPage() {
                       Copy Code
                     </>
                   )}
-                </Button>
-                <Button
-                  className="flex-1"
-                  onClick={handleSendMore}
-                >
-                  Send More
                 </Button>
               </div>
             </div>
