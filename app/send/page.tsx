@@ -33,7 +33,7 @@ import {
   FileUploadTrigger,
 } from "@/components/ui/file-upload";
 import { socket } from "@/lib/socket";
-const CHUNK_SIZE = 16384;
+const CHUNK_SIZE = 65536;
 export default function SendPage() {
   const [files, setFiles] = React.useState<File[]>([]);
   const [isSent, setIsSent] = React.useState(false);
@@ -76,6 +76,7 @@ export default function SendPage() {
       toast.info("Receiver connected! Initializing P2P...");
       const pc = createPeerConnection(code);
       const dc = pc.createDataChannel("file-transfer", { ordered: true });
+      dc.bufferedAmountLowThreshold = 524288;
       dataChannel.current = dc;
       dc.onopen = () => {
         console.log("Data channel is open!");
@@ -162,7 +163,9 @@ export default function SendPage() {
         totalBytesSent += buffer.byteLength;
         chunkCount++;
         const progress = Math.round((totalBytesSent / totalSize) * 100);
-        setTransferProgress(progress);
+        if (progress !== transferProgress) {
+          setTransferProgress(progress);
+        }
         if (chunkCount % 100 === 0) {
           console.log(
             `Sent chunk ${chunkCount}, total bytes: ${offset}, progress: ${progress}%`
