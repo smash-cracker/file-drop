@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/input-otp";
 import { toast } from "sonner";
 
+import { socket } from "@/lib/socket";
+
 export default function ReceivePage() {
     const [value, setValue] = React.useState("");
     const [isVerifying, setIsVerifying] = React.useState(false);
@@ -27,11 +29,18 @@ export default function ReceivePage() {
         if (value.length !== 6) return;
 
         setIsVerifying(true);
-        // Simulate verification
-        setTimeout(() => {
+
+        // Connect and join signaling room
+        socket.connect();
+        socket.emit("join-room", value);
+
+        // Listen for peer connection
+        socket.once("peer-connected", () => {
             setIsVerifying(false);
-            toast.success("Code verified! Starting download...");
-        }, 1500);
+            console.log("Peer connected!");
+            toast.success("Connected to sender! Starting download...");
+            // In Phase 3, this is where we would start the WebRTC handshake
+        });
     };
 
     return (

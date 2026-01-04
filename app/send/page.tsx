@@ -24,11 +24,27 @@ import {
   FileUploadTrigger,
 } from "@/components/ui/file-upload";
 
+import { socket } from "@/lib/socket";
+
 export default function SendPage() {
   const [files, setFiles] = React.useState<File[]>([]);
   const [isSent, setIsSent] = React.useState(false);
   const [code, setCode] = React.useState("");
   const [isCopied, setIsCopied] = React.useState(false);
+  const [peerConnected, setPeerConnected] = React.useState(false);
+
+  React.useEffect(() => {
+    socket.on("peer-connected", () => {
+      console.log("Peer connected!");
+      setPeerConnected(true);
+      toast.info("Receiver connected! Preparing transfer...");
+    });
+
+    return () => {
+      socket.off("peer-connected");
+      socket.disconnect();
+    };
+  }, []);
 
   const generateCode = () => {
     // Generate a 6-digit random code
@@ -42,6 +58,12 @@ export default function SendPage() {
     const newCode = generateCode();
     setCode(newCode);
     setIsSent(true);
+    setPeerConnected(false);
+
+    // Connect and join room
+    socket.connect();
+    socket.emit("join-room", newCode);
+
     toast.success("Files ready to share!");
   };
 
@@ -83,9 +105,8 @@ export default function SendPage() {
 
   const onFileReject = React.useCallback((file: File, message: string) => {
     toast(message, {
-      description: `"${
-        file.name.length > 20 ? `${file.name.slice(0, 20)}...` : file.name
-      }" has been rejected`,
+      description: `"${file.name.length > 20 ? `${file.name.slice(0, 20)}...` : file.name
+        }" has been rejected`,
     });
   }, []);
 
@@ -169,7 +190,7 @@ export default function SendPage() {
               <div className="flex flex-col items-center gap-4 py-4">
                 <PulsingIcon />
                 <p className="text-sm font-medium text-muted-foreground animate-pulse py-4">
-                  Waiting for receiver...
+                  {peerConnected ? "Peer Connected!" : "Waiting for receiver..."}
                 </p>
               </div>
               <div className="text-center space-y-2">
