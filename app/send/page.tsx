@@ -1,5 +1,5 @@
 "use client";
-import { Upload, X, ArrowLeft, Copy, Check, Loader2 } from "lucide-react";
+import { Upload, X, ArrowLeft, Copy, Check, Loader2, CheckCircle2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { PulsingIcon } from "@/components/ui/pulsing-icon";
@@ -31,6 +31,7 @@ export default function SendPage() {
   const [isCopied, setIsCopied] = React.useState(false);
   const [peerConnected, setPeerConnected] = React.useState(false);
   const [isTransferring, setIsTransferring] = React.useState(false);
+  const [transferComplete, setTransferComplete] = React.useState(false);
   const peerConnection = React.useRef<RTCPeerConnection | null>(null);
   const dataChannel = React.useRef<RTCDataChannel | null>(null);
   const createPeerConnection = (roomCode: string) => {
@@ -160,6 +161,12 @@ export default function SendPage() {
 
     toast.success("Transfer complete!");
     setIsTransferring(false);
+    setTransferComplete(true);
+
+    // Close connections after transfer
+    dataChannel.current?.close();
+    peerConnection.current?.close();
+    socket.disconnect();
   };
   const generateCode = () => {
     return Math.floor(100000 + Math.random() * 900000).toString();
@@ -184,6 +191,16 @@ export default function SendPage() {
     setIsSent(false);
     setFiles([]);
     setCode("");
+    setPeerConnected(false);
+    setIsTransferring(false);
+    setTransferComplete(false);
+    setIsCopied(false);
+
+    // Clean up connections
+    dataChannel.current?.close();
+    peerConnection.current?.close();
+    peerConnection.current = null;
+    dataChannel.current = null;
   };
   const onFileValidate = React.useCallback(
     (file: File): string | null => {
@@ -213,16 +230,35 @@ export default function SendPage() {
             </Link>
           )}
           <CardTitle className="text-center text-2xl">
-            {isSent ? "Ready to Receive" : "Send Files"}
+            {transferComplete ? "Transfer Complete" : isSent ? "Ready to Receive" : "Send Files"}
           </CardTitle>
           <CardDescription className="text-center">
-            {isSent
-              ? "Share this code with the receiver"
-              : "Upload files to generate a share code"}
+            {transferComplete
+              ? "Your files have been successfully transferred"
+              : isSent
+                ? "Share this code with the receiver"
+                : "Upload files to generate a share code"}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {!isSent ? (
+          {transferComplete ? (
+            <div className="space-y-6 py-4">
+              <div className="flex flex-col items-center gap-4">
+                <div className="rounded-full bg-primary/10 p-4">
+                  <CheckCircle2 className="h-12 w-12 text-primary" />
+                </div>
+                <div className="text-center space-y-2">
+                  <p className="font-semibold text-lg">Files Sent Successfully!</p>
+                  <p className="text-sm text-muted-foreground">
+                    {files.length} {files.length === 1 ? "file" : "files"} transferred
+                  </p>
+                </div>
+              </div>
+              <Button className="w-full" onClick={handleSendMore}>
+                Send Again
+              </Button>
+            </div>
+          ) : !isSent ? (
             <div className="space-y-6">
               <FileUpload
                 value={files}
