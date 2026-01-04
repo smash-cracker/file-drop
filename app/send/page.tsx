@@ -160,8 +160,10 @@ export default function SendPage() {
         const progress = Math.round((totalBytesSent / totalSize) * 100);
         setTransferProgress(progress);
 
-        // Log every chunk to debug
-        console.log(`Sent chunk ${chunkCount}, total bytes: ${offset}, progress: ${progress}%`);
+        // Log every 100 chunks to reduce console noise
+        if (chunkCount % 100 === 0) {
+          console.log(`Sent chunk ${chunkCount}, total bytes: ${offset}, progress: ${progress}%`);
+        }
       }
 
       console.log(`Finished sending ${file.name}. Total chunks: ${chunkCount}`);
