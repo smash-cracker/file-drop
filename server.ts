@@ -30,6 +30,15 @@ app.prepare().then(() => {
             }
         });
 
+        socket.on("disconnecting", () => {
+            for (const room of socket.rooms) {
+                if (room !== socket.id) {
+                    socket.to(room).emit("peer-disconnected");
+                    console.log(`User ${socket.id} disconnected from room: ${room}`);
+                }
+            }
+        });
+
         socket.on("disconnect", () => {
             console.log("User disconnected:", socket.id);
         });

@@ -40,8 +40,15 @@ export default function SendPage() {
       toast.info("Receiver connected! Preparing transfer...");
     });
 
+    socket.on("peer-disconnected", () => {
+      console.log("Peer disconnected");
+      setPeerConnected(false);
+      toast.info("Receiver disconnected");
+    });
+
     return () => {
       socket.off("peer-connected");
+      socket.off("peer-disconnected");
       socket.disconnect();
     };
   }, []);
