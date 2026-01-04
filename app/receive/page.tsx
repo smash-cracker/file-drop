@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { ArrowLeft, Loader2, Download, FileCheck } from "lucide-react";
+import { ArrowLeft, Loader2, Download, FileCheck, XCircle } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +29,7 @@ export default function ReceivePage() {
   const [isVerifying, setIsVerifying] = React.useState(false);
   const [receivedFiles, setReceivedFiles] = React.useState<ReceivedFile[]>([]);
   const [progress, setProgress] = React.useState(0);
+  const [transferFailed, setTransferFailed] = React.useState(false);
   const peerConnection = React.useRef<RTCPeerConnection | null>(null);
   const dataChannel = React.useRef<RTCDataChannel | null>(null);
   const currentFileMetadata = React.useRef<ReceivedFile | null>(null);
@@ -124,8 +125,21 @@ export default function ReceivePage() {
         }
       }
     });
+    socket.on("peer-disconnected", () => {
+      console.log("Sender disconnected");
+      if (currentFileMetadata.current && receivedFiles.length === 0) {
+        setTransferFailed(true);
+        toast.error("Transfer failed: Sender disconnected");
+        dataChannel.current?.close();
+        peerConnection.current?.close();
+        socket.disconnect();
+      } else {
+        toast.info("Sender disconnected");
+      }
+    });
     return () => {
       socket.off("signal");
+      socket.off("peer-disconnected");
       if (peerConnection.current) {
         peerConnection.current.close();
         peerConnection.current = null;
@@ -154,9 +168,13 @@ export default function ReceivePage() {
           >
             <ArrowLeft className="h-6 w-6" />
           </Link>
-          <CardTitle className="text-center text-2xl">Receive File</CardTitle>
+          <CardTitle className="text-center text-2xl">
+            {transferFailed ? "Transfer Failed" : "Receive File"}
+          </CardTitle>
           <CardDescription className="text-center">
-            {receivedFiles.length > 0
+            {transferFailed
+              ? "File transfer was interrupted"
+              : receivedFiles.length > 0
               ? "Files received successfully"
               : currentFileMetadata.current
               ? `Receiving: ${currentFileMetadata.current.name}`
@@ -164,8 +182,34 @@ export default function ReceivePage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-6">
-          {/* State 1: Receiving Data (Metadata exists, but file not yet finalized) */}
-          {currentFileMetadata.current && receivedFiles.length === 0 ? (
+          {transferFailed ? (
+            <div className="space-y-6 py-4 flex flex-col items-center w-full">
+              <div className="flex flex-col items-center gap-4">
+                <div className="rounded-full bg-destructive/10 p-4">
+                  <XCircle className="h-12 w-12 text-destructive" />
+                </div>
+                <div className="text-center space-y-2">
+                  <p className="font-semibold text-lg">Transfer Interrupted</p>
+                  <p className="text-sm text-muted-foreground">
+                    Sender disconnected during transfer
+                  </p>
+                </div>
+              </div>
+              <Button
+                className="w-full"
+                onClick={() => {
+                  setTransferFailed(false);
+                  setValue("");
+                  currentFileMetadata.current = null;
+                  receivedChunks.current = [];
+                  bytesReceived.current = 0;
+                  setProgress(0);
+                }}
+              >
+                Try Again
+              </Button>
+            </div>
+          ) : currentFileMetadata.current && receivedFiles.length === 0 ? (
             <div className="w-full space-y-4 py-4">
               <div className="text-center">
                 <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
