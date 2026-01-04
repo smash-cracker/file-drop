@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "ts-node server.ts",
-    "build": "next build",
+    "build": "tsc server.ts --outDir . --module ES2022 --target ES2022 --moduleResolution node --esModuleInterop && next build",
     "start": "NODE_ENV=production node server.js",
     "lint": "eslint"
   },
