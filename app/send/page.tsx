@@ -3,6 +3,7 @@
 import { Upload, X, ArrowLeft, Copy, Check } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
+import { PulsingIcon } from "@/components/ui/pulsing-icon";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import {
@@ -165,8 +166,14 @@ export default function SendPage() {
             </div>
           ) : (
             <div className="space-y-6">
+              <div className="flex flex-col items-center gap-4 py-4">
+                <PulsingIcon />
+                <p className="text-sm font-medium text-muted-foreground animate-pulse py-4">
+                  Waiting for receiver...
+                </p>
+              </div>
               <div className="text-center space-y-2">
-                <div className="text-6xl font-bold tracking-widest font-mono py-8 select-all">
+                <div className="text-6xl font-bold tracking-widest font-mono py-2 select-all">
                   {code}
                 </div>
                 <p className="text-sm text-muted-foreground">
