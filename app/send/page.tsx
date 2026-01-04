@@ -1,5 +1,14 @@
 "use client";
-import { Upload, X, ArrowLeft, Copy, Check, Loader2, CheckCircle2 } from "lucide-react";
+import {
+  Upload,
+  X,
+  ArrowLeft,
+  Copy,
+  Check,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { PulsingIcon } from "@/components/ui/pulsing-icon";
@@ -33,6 +42,7 @@ export default function SendPage() {
   const [peerConnected, setPeerConnected] = React.useState(false);
   const [isTransferring, setIsTransferring] = React.useState(false);
   const [transferComplete, setTransferComplete] = React.useState(false);
+  const [transferFailed, setTransferFailed] = React.useState(false);
   const [transferProgress, setTransferProgress] = React.useState(0);
   const peerConnection = React.useRef<RTCPeerConnection | null>(null);
   const dataChannel = React.useRef<RTCDataChannel | null>(null);
@@ -96,7 +106,16 @@ export default function SendPage() {
     socket.on("peer-disconnected", () => {
       console.log("Peer disconnected");
       setPeerConnected(false);
-      toast.info("Receiver disconnected");
+      if (isTransferring) {
+        setIsTransferring(false);
+        setTransferFailed(true);
+        toast.error("Transfer failed: Receiver disconnected");
+        dataChannel.current?.close();
+        peerConnection.current?.close();
+        socket.disconnect();
+      } else {
+        toast.info("Receiver disconnected");
+      }
     });
     return () => {
       socket.off("peer-connected");
@@ -109,14 +128,10 @@ export default function SendPage() {
     if (!dataChannel.current || files.length === 0) return;
     setIsTransferring(true);
     setTransferProgress(0);
-
     const totalSize = files.reduce((acc, f) => acc + f.size, 0);
     let totalBytesSent = 0;
-
     for (const file of files) {
       console.log(`Starting transfer for: ${file.name} (${file.size} bytes)`);
-
-      // 1. Send Metadata
       const metadata = {
         type: "metadata",
         name: file.name,
@@ -124,21 +139,13 @@ export default function SendPage() {
         mimeType: file.type,
       };
       dataChannel.current.send(JSON.stringify(metadata));
-
-      // Small delay to ensure metadata goes through first
-      await new Promise(r => setTimeout(r, 100));
-
-      // 2. Send Binary Data in Chunks
+      await new Promise((r) => setTimeout(r, 100));
       let offset = 0;
       let chunkCount = 0;
-
       while (offset < file.size) {
-        // Safety check for chunk size
         const sliceEnd = Math.min(offset + CHUNK_SIZE, file.size);
         const chunk = file.slice(offset, sliceEnd);
         const buffer = await chunk.arrayBuffer();
-
-        // Flow Control: Wait if buffer is full
         if (
           dataChannel.current.bufferedAmount >
           dataChannel.current.bufferedAmountLowThreshold
@@ -150,33 +157,24 @@ export default function SendPage() {
             };
           });
         }
-
         dataChannel.current.send(buffer);
         offset += buffer.byteLength;
         totalBytesSent += buffer.byteLength;
         chunkCount++;
-
-        // Update progress
         const progress = Math.round((totalBytesSent / totalSize) * 100);
         setTransferProgress(progress);
-
-        // Log every 100 chunks to reduce console noise
         if (chunkCount % 100 === 0) {
-          console.log(`Sent chunk ${chunkCount}, total bytes: ${offset}, progress: ${progress}%`);
+          console.log(
+            `Sent chunk ${chunkCount}, total bytes: ${offset}, progress: ${progress}%`
+          );
         }
       }
-
       console.log(`Finished sending ${file.name}. Total chunks: ${chunkCount}`);
-
-      // 3. Send Completion Message
       dataChannel.current.send(JSON.stringify({ type: "completed" }));
     }
-
     toast.success("Transfer complete!");
     setIsTransferring(false);
     setTransferComplete(true);
-
-    // Close connections after transfer
     dataChannel.current?.close();
     peerConnection.current?.close();
     socket.disconnect();
@@ -207,9 +205,9 @@ export default function SendPage() {
     setPeerConnected(false);
     setIsTransferring(false);
     setTransferComplete(false);
+    setTransferFailed(false);
+    setTransferProgress(0);
     setIsCopied(false);
-
-    // Clean up connections
     dataChannel.current?.close();
     peerConnection.current?.close();
     peerConnection.current = null;
@@ -226,8 +224,9 @@ export default function SendPage() {
   );
   const onFileReject = React.useCallback((file: File, message: string) => {
     toast(message, {
-      description: `"${file.name.length > 20 ? `${file.name.slice(0, 20)}...` : file.name
-        }" has been rejected`,
+      description: `"${
+        file.name.length > 20 ? `${file.name.slice(0, 20)}...` : file.name
+      }" has been rejected`,
     });
   }, []);
   return (
@@ -243,27 +242,55 @@ export default function SendPage() {
             </Link>
           )}
           <CardTitle className="text-center text-2xl">
-            {transferComplete ? "Transfer Complete" : isSent ? "Ready to Receive" : "Send Files"}
+            {transferFailed
+              ? "Transfer Failed"
+              : transferComplete
+              ? "Transfer Complete"
+              : isSent
+              ? "Ready to Receive"
+              : "Send Files"}
           </CardTitle>
           <CardDescription className="text-center">
-            {transferComplete
+            {transferFailed
+              ? "File transfer was interrupted"
+              : transferComplete
               ? "Your files have been successfully transferred"
               : isSent
-                ? "Share this code with the receiver"
-                : "Upload files to generate a share code"}
+              ? "Share this code with the receiver"
+              : "Upload files to generate a share code"}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {transferComplete ? (
+          {transferFailed ? (
+            <div className="space-y-6 py-4">
+              <div className="flex flex-col items-center gap-4">
+                <div className="rounded-full bg-destructive/10 p-4">
+                  <XCircle className="h-12 w-12 text-destructive" />
+                </div>
+                <div className="text-center space-y-2">
+                  <p className="font-semibold text-lg">Transfer Interrupted</p>
+                  <p className="text-sm text-muted-foreground">
+                    Receiver disconnected during transfer
+                  </p>
+                </div>
+              </div>
+              <Button className="w-full" onClick={handleSendMore}>
+                Send Again
+              </Button>
+            </div>
+          ) : transferComplete ? (
             <div className="space-y-6 py-4">
               <div className="flex flex-col items-center gap-4">
                 <div className="rounded-full bg-primary/10 p-4">
                   <CheckCircle2 className="h-12 w-12 text-primary" />
                 </div>
                 <div className="text-center space-y-2">
-                  <p className="font-semibold text-lg">Files Sent Successfully!</p>
+                  <p className="font-semibold text-lg">
+                    Files Sent Successfully!
+                  </p>
                   <p className="text-sm text-muted-foreground">
-                    {files.length} {files.length === 1 ? "file" : "files"} transferred
+                    {files.length} {files.length === 1 ? "file" : "files"}{" "}
+                    transferred
                   </p>
                 </div>
               </div>
@@ -342,8 +369,8 @@ export default function SendPage() {
                   {isTransferring
                     ? "Transferring..."
                     : peerConnected
-                      ? "Peer Connected!"
-                      : "Waiting for receiver..."}
+                    ? "Peer Connected!"
+                    : "Waiting for receiver..."}
                 </p>
               </div>
               <div className="text-center space-y-2">
