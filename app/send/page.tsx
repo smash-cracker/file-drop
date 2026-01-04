@@ -82,6 +82,20 @@ export default function SendPage() {
         console.log("Data channel is open!");
         startFileTransfer();
       };
+      dc.onmessage = (event) => {
+        if (typeof event.data === "string") {
+          const message = JSON.parse(event.data);
+          if (message.type === "transfer-ack") {
+            console.log("Transfer acknowledged by receiver!");
+            toast.success("Transfer complete!");
+            setIsTransferring(false);
+            setTransferComplete(true);
+            dataChannel.current?.close();
+            peerConnection.current?.close();
+            socket.disconnect();
+          }
+        }
+      };
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       console.log("Sending offer to receiver...");
@@ -175,12 +189,7 @@ export default function SendPage() {
       console.log(`Finished sending ${file.name}. Total chunks: ${chunkCount}`);
       dataChannel.current.send(JSON.stringify({ type: "completed" }));
     }
-    toast.success("Transfer complete!");
-    setIsTransferring(false);
-    setTransferComplete(true);
-    dataChannel.current?.close();
-    peerConnection.current?.close();
-    socket.disconnect();
+    console.log("All files sent. Waiting for receiver acknowledgment...");
   };
   const generateCode = () => {
     return Math.floor(100000 + Math.random() * 900000).toString();

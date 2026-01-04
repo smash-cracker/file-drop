@@ -30,6 +30,7 @@ export default function ReceivePage() {
   const [receivedFiles, setReceivedFiles] = React.useState<ReceivedFile[]>([]);
   const [progress, setProgress] = React.useState(0);
   const peerConnection = React.useRef<RTCPeerConnection | null>(null);
+  const dataChannel = React.useRef<RTCDataChannel | null>(null);
   const currentFileMetadata = React.useRef<ReceivedFile | null>(null);
   const receivedChunks = React.useRef<Uint8Array[]>([]);
   const bytesReceived = React.useRef(0);
@@ -54,29 +55,24 @@ export default function ReceivePage() {
   };
   const setupDataChannel = (channel: RTCDataChannel) => {
     channel.binaryType = "arraybuffer";
+    dataChannel.current = channel;
     channel.onmessage = (event) => {
       const data = event.data;
-
       if (typeof data === "string") {
         const message = JSON.parse(data);
         if (message.type === "metadata") {
-          // We are now receiving
           currentFileMetadata.current = message;
           receivedChunks.current = [];
           bytesReceived.current = 0;
-
-          // Reset progress to 0 when a new file starts
           setProgress(0);
           console.log("Receiving file:", message.name);
         } else if (message.type === "completed") {
           finalizeFile();
         }
       } else {
-        // Binary chunk received
         const chunk = new Uint8Array(data);
         receivedChunks.current.push(chunk);
         bytesReceived.current += chunk.byteLength;
-
         if (currentFileMetadata.current) {
           const currentProgress =
             (bytesReceived.current / currentFileMetadata.current.size) * 100;
@@ -100,6 +96,10 @@ export default function ReceivePage() {
     ]);
     toast.success(`Received ${currentFileMetadata.current.name}!`);
     setProgress(0);
+    if (dataChannel.current && dataChannel.current.readyState === "open") {
+      dataChannel.current.send(JSON.stringify({ type: "transfer-ack" }));
+      console.log("Sent transfer acknowledgment to sender");
+    }
   };
   const roomCodeRef = React.useRef(value);
   React.useEffect(() => {
@@ -159,11 +159,10 @@ export default function ReceivePage() {
             {receivedFiles.length > 0
               ? "Files received successfully"
               : currentFileMetadata.current
-                ? `Receiving: ${currentFileMetadata.current.name}`
-                : "Enter the 6-digit code to receive files"}
+              ? `Receiving: ${currentFileMetadata.current.name}`
+              : "Enter the 6-digit code to receive files"}
           </CardDescription>
         </CardHeader>
-
         <CardContent className="flex flex-col items-center gap-6">
           {/* State 1: Receiving Data (Metadata exists, but file not yet finalized) */}
           {currentFileMetadata.current && receivedFiles.length === 0 ? (
@@ -182,7 +181,6 @@ export default function ReceivePage() {
               </div>
             </div>
           ) : receivedFiles.length === 0 ? (
-            /* State 2: Enter Code (Default) */
             <>
               <div className="flex justify-center w-full">
                 <InputOTP maxLength={6} value={value} onChange={setValue}>
@@ -215,7 +213,6 @@ export default function ReceivePage() {
               </Button>
             </>
           ) : (
-            /* State 3: Success / Download */
             <div className="w-full space-y-4">
               {receivedFiles.map((file, idx) => (
                 <div
