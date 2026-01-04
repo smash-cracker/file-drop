@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 export default function HomePage() {
   return (
     <main>
-      <h1 className="min-h-screen flex items-center justify-center">
+      <h1 className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
         Template Lorem ipsum dolor sit amet consectetur adipisicing elit. Quam
         eaque minus consequuntur exercitationem corporis! Consectetur
         perspiciatis quas, quis necessitatibus eos quasi nihil illo ipsum
