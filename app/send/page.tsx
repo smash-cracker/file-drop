@@ -1,6 +1,6 @@
 "use client";
 
-import { Upload, X, ArrowLeft, Copy, Check } from "lucide-react";
+import { Upload, X, ArrowLeft, Copy, Check, Loader2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { PulsingIcon } from "@/components/ui/pulsing-icon";
@@ -26,18 +26,81 @@ import {
 
 import { socket } from "@/lib/socket";
 
+const CHUNK_SIZE = 16384; // 16KB chunks
+
 export default function SendPage() {
   const [files, setFiles] = React.useState<File[]>([]);
   const [isSent, setIsSent] = React.useState(false);
   const [code, setCode] = React.useState("");
   const [isCopied, setIsCopied] = React.useState(false);
   const [peerConnected, setPeerConnected] = React.useState(false);
+  const [isTransferring, setIsTransferring] = React.useState(false);
+
+  // WebRTC Refs
+  const peerConnection = React.useRef<RTCPeerConnection | null>(null);
+  const dataChannel = React.useRef<RTCDataChannel | null>(null);
+
+  const createPeerConnection = (roomCode: string) => {
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    });
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit("signal", { roomCode, data: { candidate: event.candidate } });
+      }
+    };
+
+    peerConnection.current = pc;
+    return pc;
+  };
 
   React.useEffect(() => {
-    socket.on("peer-connected", () => {
-      console.log("Peer connected!");
+    if (!code) return;
+
+    // Ensure connection is active when code exists
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    // Explicitly join the room
+    socket.emit("join-room", code);
+
+    socket.on("peer-connected", async () => {
+      // Prevent duplicate connections (React StrictMode/Fast Refresh can trigger this multiple times)
+      if (peerConnection.current) {
+        console.log("Peer connection already exists, skipping duplicate setup");
+        return;
+      }
+
       setPeerConnected(true);
-      toast.info("Receiver connected! Preparing transfer...");
+      toast.info("Receiver connected! Initializing P2P...");
+
+      const pc = createPeerConnection(code);
+      const dc = pc.createDataChannel("file-transfer", { ordered: true });
+      dataChannel.current = dc;
+
+      dc.onopen = () => {
+        console.log("Data channel is open!");
+        startFileTransfer();
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      console.log("Sending offer to receiver...");
+      socket.emit("signal", { roomCode: code, data: { sdp: pc.localDescription } });
+    });
+
+    socket.on("signal", async (data) => {
+      if (!peerConnection.current) return;
+
+      if (data.sdp && data.sdp.type === "answer") {
+        console.log("Answer received from receiver!");
+        await peerConnection.current.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      } else if (data.candidate) {
+        console.log("ICE Candidate received");
+        await peerConnection.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+      }
     });
 
     socket.on("peer-disconnected", () => {
@@ -49,9 +112,65 @@ export default function SendPage() {
     return () => {
       socket.off("peer-connected");
       socket.off("peer-disconnected");
-      socket.disconnect();
+      socket.off("signal");
+      peerConnection.current?.close();
+      // REMOVE socket.disconnect() from here. 
+      // It kills the connection during re-renders.
     };
-  }, []);
+  }, [code]);
+
+  const startFileTransfer = async () => {
+    if (!dataChannel.current || files.length === 0) return;
+
+    setIsTransferring(true);
+
+    for (const file of files) {
+      // 1. Send Metadata
+      const metadata = {
+        type: "metadata",
+        name: file.name,
+        size: file.size,
+        mimeType: file.type
+      };
+      dataChannel.current.send(JSON.stringify(metadata));
+
+      // 2. Manual Chunking Loop
+      let offset = 0;
+      let chunkCount = 0;
+
+      while (offset < file.size) {
+        // Slice the file into exactly CHUNK_SIZE pieces
+        const chunk = file.slice(offset, offset + CHUNK_SIZE);
+        const buffer = await chunk.arrayBuffer();
+
+        // Check backpressure: if buffer is full, wait
+        if (dataChannel.current.bufferedAmount > dataChannel.current.bufferedAmountLowThreshold) {
+          await new Promise(resolve => {
+            dataChannel.current!.onbufferedamountlow = () => {
+              dataChannel.current!.onbufferedamountlow = null;
+              resolve(null);
+            };
+          });
+        }
+
+        dataChannel.current.send(buffer);
+        offset += buffer.byteLength;
+        chunkCount++;
+
+        // Optional: Log every 100 chunks to verify progress
+        if (chunkCount % 100 === 0) {
+          console.log(`Sent ${chunkCount} chunks (${Math.round((offset / file.size) * 100)}%)`);
+        }
+      }
+
+      // 3. Send Completion Message
+      dataChannel.current.send(JSON.stringify({ type: "completed" }));
+      console.log(`Finished sending ${file.name}. Total chunks: ${chunkCount}`);
+    }
+
+    toast.success("Transfer complete!");
+    setIsTransferring(false);
+  };
 
   const generateCode = () => {
     // Generate a 6-digit random code
@@ -94,16 +213,16 @@ export default function SendPage() {
         return "You can only upload up to 2 files";
       }
 
-      // Validate file type (only images)
-      if (!file.type.startsWith("image/")) {
-        return "Only image files are allowed";
-      }
+      // // Validate file type (only images)
+      // if (!file.type.startsWith("image/")) {
+      //   return "Only image files are allowed";
+      // }
 
-      // Validate file size (max 2MB)
-      const MAX_SIZE = 2 * 1024 * 1024; // 2MB
-      if (file.size > MAX_SIZE) {
-        return `File size must be less than ${MAX_SIZE / (1024 * 1024)}MB`;
-      }
+      // // Validate file size (max 2MB)
+      // const MAX_SIZE = 2 * 1024 * 1024; // 2MB
+      // if (file.size > MAX_SIZE) {
+      //   return `File size must be less than ${MAX_SIZE / (1024 * 1024)}MB`;
+      // }
 
       return null;
     },
@@ -146,7 +265,7 @@ export default function SendPage() {
                 onValueChange={setFiles}
                 onFileValidate={onFileValidate}
                 onFileReject={onFileReject}
-                accept="image/*"
+                // accept="image/*"
                 maxFiles={2}
                 className="w-full"
                 multiple
@@ -197,7 +316,7 @@ export default function SendPage() {
               <div className="flex flex-col items-center gap-4 py-4">
                 <PulsingIcon />
                 <p className="text-sm font-medium text-muted-foreground animate-pulse py-4">
-                  {peerConnected ? "Peer Connected!" : "Waiting for receiver..."}
+                  {isTransferring ? "Transferring..." : peerConnected ? "Peer Connected!" : "Waiting for receiver..."}
                 </p>
               </div>
               <div className="text-center space-y-2">

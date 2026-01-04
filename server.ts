@@ -13,12 +13,7 @@ app.prepare().then(() => {
     const httpServer = createServer(handler);
 
     // Performance optimization: Force websocket transport to remove handshake lag
-    const io = new Server(httpServer, {
-        transports: ["websocket"],
-        cors: {
-            origin: "*",
-        }
-    });
+    const io = new Server(httpServer,);
 
     io.on("connection", (socket) => {
         console.log("User connected:", socket.id);
