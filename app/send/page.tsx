@@ -3,6 +3,7 @@ import { Upload, X, ArrowLeft, Copy, Check, Loader2, CheckCircle2 } from "lucide
 import * as React from "react";
 import { toast } from "sonner";
 import { PulsingIcon } from "@/components/ui/pulsing-icon";
+import { CircularProgress } from "@/components/ui/circular-progress";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import {
@@ -32,6 +33,7 @@ export default function SendPage() {
   const [peerConnected, setPeerConnected] = React.useState(false);
   const [isTransferring, setIsTransferring] = React.useState(false);
   const [transferComplete, setTransferComplete] = React.useState(false);
+  const [transferProgress, setTransferProgress] = React.useState(0);
   const peerConnection = React.useRef<RTCPeerConnection | null>(null);
   const dataChannel = React.useRef<RTCDataChannel | null>(null);
   const createPeerConnection = (roomCode: string) => {
@@ -106,6 +108,10 @@ export default function SendPage() {
   const startFileTransfer = async () => {
     if (!dataChannel.current || files.length === 0) return;
     setIsTransferring(true);
+    setTransferProgress(0);
+
+    const totalSize = files.reduce((acc, f) => acc + f.size, 0);
+    let totalBytesSent = 0;
 
     for (const file of files) {
       console.log(`Starting transfer for: ${file.name} (${file.size} bytes)`);
@@ -147,10 +153,15 @@ export default function SendPage() {
 
         dataChannel.current.send(buffer);
         offset += buffer.byteLength;
+        totalBytesSent += buffer.byteLength;
         chunkCount++;
 
+        // Update progress
+        const progress = Math.round((totalBytesSent / totalSize) * 100);
+        setTransferProgress(progress);
+
         // Log every chunk to debug
-        console.log(`Sent chunk ${chunkCount}, total bytes: ${offset}`);
+        console.log(`Sent chunk ${chunkCount}, total bytes: ${offset}, progress: ${progress}%`);
       }
 
       console.log(`Finished sending ${file.name}. Total chunks: ${chunkCount}`);
@@ -312,7 +323,19 @@ export default function SendPage() {
           ) : (
             <div className="space-y-6">
               <div className="flex flex-col items-center gap-4 py-4">
-                <PulsingIcon />
+                {isTransferring ? (
+                  <CircularProgress
+                    value={transferProgress}
+                    size={120}
+                    strokeWidth={10}
+                    showLabel
+                    labelClassName="text-xl font-bold"
+                    renderLabel={(progress) => `${progress}%`}
+                    shape="round"
+                  />
+                ) : (
+                  <PulsingIcon />
+                )}
                 <p className="text-sm font-medium text-muted-foreground animate-pulse py-4">
                   {isTransferring
                     ? "Transferring..."
