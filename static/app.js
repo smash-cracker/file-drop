@@ -12,18 +12,26 @@ function connectWebSocket() {
     };
 
     socket.onmessage = (event) => {
-        const message = JSON.parse(event.data);
+    const message = JSON.parse(event.data);
 
-        if (message.type === "identity") {
-            myDeviceID = message.id;
+    if (message.type === "identity") {
+        myDeviceID = message.id;
 
-            console.log("My device ID:", myDeviceID);
-        }
+        console.log("My device ID:", myDeviceID);
+    }
 
-        if (message.type === "devices") {
-            updateDeviceList(message.devices);
-        }
-    };
+    if (message.type === "devices") {
+        updateDeviceList(message.devices);
+    }
+
+    if (message.type === "connect-request") {
+        console.log(
+            `${message.from} wants to connect to you`
+        );
+
+        alert(`${message.from} wants to connect to you`);
+    }
+};
 
     socket.onclose = () => {
         statusElement.textContent = "Disconnected from server";
@@ -33,7 +41,16 @@ function connectWebSocket() {
         statusElement.textContent = "WebSocket error";
     };
 }
+function requestConnection(targetDeviceID) {
+    console.log("Requesting connection to:", targetDeviceID);
 
+    const message = {
+        type: "connect-request",
+        target: targetDeviceID
+    };
+
+    socket.send(JSON.stringify(message));
+}
 function updateDeviceList(devices) {
     devicesElement.innerHTML = "";
 
@@ -47,10 +64,14 @@ function updateDeviceList(devices) {
     }
 
     for (const deviceID of otherDevices) {
-        const device = document.createElement("div");
+        const device = document.createElement("button");
 
-        device.textContent = deviceID;
+        device.textContent = `Connect to ${deviceID}`;
         device.className = "device";
+
+        device.addEventListener("click", () => {
+            requestConnection(deviceID);
+        });
 
         devicesElement.appendChild(device);
     }

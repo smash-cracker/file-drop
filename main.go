@@ -28,6 +28,8 @@ type Message struct {
 	Type    string   `json:"type"`
 	Devices []string `json:"devices,omitempty"`
 	ID      string   `json:"id,omitempty"`
+	Target  string   `json:"target,omitempty"`
+	From    string   `json:"from,omitempty"`
 }
 
 var (
@@ -121,11 +123,29 @@ func websocketHandler(w http.ResponseWriter, r *http.Request) {
 	// Tell everyone about the new device.
 	broadcastDeviceList()
 
-	// Wait for the browser to disconnect.
 	for {
-		_, _, err := conn.ReadMessage()
+		_, rawMessage, err := conn.ReadMessage()
 		if err != nil {
 			break
+		}
+
+		var message Message
+
+		if err := json.Unmarshal(rawMessage, &message); err != nil {
+			log.Println("Invalid message:", err)
+			continue
+		}
+
+		log.Printf("%s sent message: %+v\n", deviceID, message)
+
+		switch message.Type {
+
+		case "connect-request":
+			sendToClient(message.Target, Message{
+				Type:   "connect-request",
+				From:   deviceID,
+				Target: message.Target,
+			})
 		}
 	}
 
@@ -137,6 +157,26 @@ func websocketHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Tell everyone that this device disappeared.
 	broadcastDeviceList()
+}
+
+func sendToClient(clientID string, message Message) {
+	clientsMu.Lock()
+	client, exists := clients[clientID]
+	clientsMu.Unlock()
+
+	if !exists {
+		return
+	}
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		log.Println("Failed to encode message:", err)
+		return
+	}
+
+	if err := client.Conn.WriteMessage(websocket.TextMessage, data); err != nil {
+		log.Println("Failed to send message:", err)
+	}
 }
 
 func main() {
