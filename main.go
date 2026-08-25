@@ -30,6 +30,7 @@ type Message struct {
 	ID      string   `json:"id,omitempty"`
 	Target  string   `json:"target,omitempty"`
 	From    string   `json:"from,omitempty"`
+	SDP     string   `json:"sdp,omitempty"`
 }
 
 var (
@@ -145,6 +146,19 @@ func websocketHandler(w http.ResponseWriter, r *http.Request) {
 				Type:   "connect-request",
 				From:   deviceID,
 				Target: message.Target,
+			})
+		case "webrtc-offer":
+			sendToClient(message.Target, Message{
+				Type: "webrtc-offer",
+				From: deviceID,
+				SDP:  message.SDP,
+			})
+
+		case "webrtc-answer":
+			sendToClient(message.Target, Message{
+				Type: "webrtc-answer",
+				From: deviceID,
+				SDP:  message.SDP,
 			})
 		}
 	}
