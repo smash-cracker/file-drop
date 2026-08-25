@@ -1,17 +1,34 @@
-const socket = new WebSocket(`ws://${window.location.host}/ws`);
+let socket;
+let myDeviceID = null;
 
-socket.onopen = () => {
-    console.log("WebSocket connected");
-};
+function connectWebSocket() {
+    socket = new WebSocket(`ws://${window.location.host}/ws`);
 
-socket.onmessage = (event) => {
-    console.log("Server:", event.data);
-};
+    socket.onopen = () => {
+        console.log("WebSocket connected");
+    };
 
-socket.onclose = () => {
-    console.log("WebSocket disconnected");
-};
+    socket.onmessage = (event) => {
+        const message = JSON.parse(event.data);
 
-socket.onerror = (error) => {
-    console.error("WebSocket error:", error);
-};
+        if (message.type === "identity") {
+            myDeviceID = message.id;
+
+            console.log("My device ID:", myDeviceID);
+        }
+
+        if (message.type === "devices") {
+            console.log("Online devices:", message.devices);
+        }
+    };
+
+    socket.onclose = () => {
+        console.log("WebSocket disconnected");
+    };
+
+    socket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+    };
+}
+
+connectWebSocket();
