@@ -1,10 +1,11 @@
-body {
-    font-family: Arial, sans-serif;
-    max-width: 800px;
-    margin: 40px auto;
-    padding: 0 20px;
+#status {
+    color: #555;
 }
 
-h1 {
-    margin-bottom: 10px;
+.device {
+    padding: 12px;
+    margin: 8px 0;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #f5f5f5;
 }

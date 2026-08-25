@@ -1,11 +1,14 @@
 let socket;
 let myDeviceID = null;
 
+const statusElement = document.getElementById("status");
+const devicesElement = document.getElementById("devices");
+
 function connectWebSocket() {
     socket = new WebSocket(`ws://${window.location.host}/ws`);
 
     socket.onopen = () => {
-        console.log("WebSocket connected");
+        statusElement.textContent = "Connected to server";
     };
 
     socket.onmessage = (event) => {
@@ -18,17 +21,39 @@ function connectWebSocket() {
         }
 
         if (message.type === "devices") {
-            console.log("Online devices:", message.devices);
+            updateDeviceList(message.devices);
         }
     };
 
     socket.onclose = () => {
-        console.log("WebSocket disconnected");
+        statusElement.textContent = "Disconnected from server";
     };
 
-    socket.onerror = (error) => {
-        console.error("WebSocket error:", error);
+    socket.onerror = () => {
+        statusElement.textContent = "WebSocket error";
     };
+}
+
+function updateDeviceList(devices) {
+    devicesElement.innerHTML = "";
+
+    const otherDevices = devices.filter(
+        deviceID => deviceID !== myDeviceID
+    );
+
+    if (otherDevices.length === 0) {
+        devicesElement.innerHTML = "<p>No other devices online.</p>";
+        return;
+    }
+
+    for (const deviceID of otherDevices) {
+        const device = document.createElement("div");
+
+        device.textContent = deviceID;
+        device.className = "device";
+
+        devicesElement.appendChild(device);
+    }
 }
 
 connectWebSocket();
