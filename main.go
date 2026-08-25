@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/gorilla/websocket"
 )
@@ -15,6 +17,16 @@ var upgrader = websocket.Upgrader{
 		return true
 	},
 }
+
+// Connected clients.
+// Key   = device ID
+// Value = WebSocket connection
+var clients = make(map[string]*websocket.Conn)
+
+// Protects the clients map from concurrent access.
+var clientsMu sync.Mutex
+
+var nextID int
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
 	err := tmpl.Execute(w, nil)
@@ -30,23 +42,35 @@ func websocketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+	clientsMu.Lock()
+	nextID++
+	deviceID := fmt.Sprintf("Device-%d", nextID)
 
-	log.Println("Browser connected via WebSocket")
+	clients[deviceID] = conn
+	clientsMu.Unlock()
+
+	log.Printf("%s connected", deviceID)
+
+	err = conn.WriteMessage(
+		websocket.TextMessage,
+		[]byte("Your device ID: "+deviceID),
+	)
+	if err != nil {
+		log.Println("Failed to send device ID:", err)
+	}
 
 	for {
-		messageType, message, err := conn.ReadMessage()
+		_, _, err := conn.ReadMessage()
 		if err != nil {
-			log.Println("Browser disconnected")
-			return
-		}
-
-		log.Printf("Received: %s\n", message)
-		err = conn.WriteMessage(messageType, message)
-		if err != nil {
-			log.Println("Failed to send message:", err)
-			return
+			break
 		}
 	}
+
+	clientsMu.Lock()
+	delete(clients, deviceID)
+	clientsMu.Unlock()
+
+	log.Printf("%s disconnected", deviceID)
 }
 
 func main() {
